@@ -1,13 +1,10 @@
 <?php
 
-# This is a function declaration
-function printHello(): void
-{
-	# This is a variable
-	$hello = "Hello, World!";
-
-	print($hello);
+#this is a comment above a function declaration
+function add(int $a, int $b) {
+	return $a + $b;
 }
 
-# This is a function call
-printHello();
+$sum = add(10, 20);
+
+echo($sum);
