@@ -1,3 +1,74 @@
+import pprint
+
+class BlockExpression:
+    def __init__(self, children) -> None:
+        self.children = children
+
+    def push(self, child):
+        self.children.append(child)
+
+class ProgramExpression(BlockExpression):
+    def __init__(self) -> None:
+        super().__init__([])
+
+class FunctionExpression(BlockExpression):
+    def __init__(self, name, arguments, children) -> None:
+        super().__init__(children)
+        self.name = name
+        self.arguments = arguments
+
+class OperationExpression:
+    def __init__(self, left, right, operator) -> None:
+        self.left = left
+        self.right = right
+        self.operator = operator
+
+class Parser():
+    def __init__(self, lexer) -> None:
+        self.lexer = lexer
+        self.root = ProgramExpression()
+
+    def expect(self, token, kind):
+        if not token.iskind(kind):
+            raise Exception(f'{token.location.file}{token.value} expected {kind}')
+
+    def parse_operation(self) -> OperationExpression:
+        left = self.lexer.next_token()
+        self.expect(left, TokenKind.IDENTIFIER)
+        operator = self.lexer.next_token()
+        self.expect(operator, TokenKind.OPERATOR)
+        right = self.lexer.next_token()
+        self.expect(right, TokenKind.IDENTIFIER)
+        return OperationExpression(left, right, operator)
+
+    def parse(self):
+        self.expect(self.lexer.next_token(), TokenKind.OPEN_TAG)
+        while token := self.lexer.next_token():
+            if token.iskind(TokenKind.IDENTIFIER) and token.value == 'function':
+                name = self.lexer.next_token()
+                arguments = []
+                return_expression = None
+                self.expect(name, TokenKind.IDENTIFIER)
+                self.expect(self.lexer.next_token(), TokenKind.OPEN_PARENTHESIS)
+                while arg := self.lexer.next_token():
+                    if arg.iskind(TokenKind.CLOSE_PARENTHESIS):
+                        break
+                    arguments.append(arg)
+                self.expect(self.lexer.next_token(), TokenKind.OPEN_CURLY)
+                while token := self.lexer.next_token():
+                    if token.iskind(TokenKind.CLOSE_CURLY):
+                        break
+                    elif token.iskind(TokenKind.IDENTIFIER) and token.value == 'return':
+                        return_expression = self.parse_operation()
+                        break
+                self.root.push(FunctionExpression(name, arguments, return_expression))
+            else:
+                if token.iskind(TokenKind.IDENTIFIER) and token.value == '$':
+                    self.root.push(self.parse_operation())
+
+        for i in self.root.children:
+            pprint.pprint(i.__dict__)
+
 class Location:
     def __init__(self, file:str) -> None:
         self.file:str = file
@@ -33,6 +104,7 @@ class TokenKind:
             '}': TokenKind.CLOSE_CURLY,
             ',': TokenKind.COMMA,
             '+': TokenKind.OPERATOR,
+            '=': TokenKind.OPERATOR,
         }
 
     @staticmethod
@@ -90,5 +162,5 @@ class Lexer:
         return token
 
 l = Lexer('./examples/program.php')
-while t := l.next_token():
-    print('TOKEN --->', t.value)
+p = Parser(l)
+p.parse()
