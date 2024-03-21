@@ -1,166 +1,95 @@
-import pprint
+from dataclasses import dataclass, field
 
-class BlockExpression:
-    def __init__(self, children) -> None:
-        self.children = children
-
-    def push(self, child):
-        self.children.append(child)
-
-class ProgramExpression(BlockExpression):
-    def __init__(self) -> None:
-        super().__init__([])
-
-class FunctionExpression(BlockExpression):
-    def __init__(self, name, arguments, children) -> None:
-        super().__init__(children)
-        self.name = name
-        self.arguments = arguments
-
-class OperationExpression:
-    def __init__(self, left, right, operator) -> None:
-        self.left = left
-        self.right = right
-        self.operator = operator
-
-class Parser():
-    def __init__(self, lexer) -> None:
-        self.lexer = lexer
-        self.root = ProgramExpression()
-
-    def expect(self, token, kind):
-        if not token.iskind(kind):
-            raise Exception(f'{token.location.file}{token.value} expected {kind}')
-
-    def parse_operation(self) -> OperationExpression:
-        left = self.lexer.next_token()
-        self.expect(left, TokenKind.IDENTIFIER)
-        operator = self.lexer.next_token()
-        self.expect(operator, TokenKind.OPERATOR)
-        right = self.lexer.next_token()
-        self.expect(right, TokenKind.IDENTIFIER)
-        return OperationExpression(left, right, operator)
-
-    def parse(self):
-        self.expect(self.lexer.next_token(), TokenKind.OPEN_TAG)
-        while token := self.lexer.next_token():
-            if token.iskind(TokenKind.IDENTIFIER) and token.value == 'function':
-                name = self.lexer.next_token()
-                arguments = []
-                return_expression = None
-                self.expect(name, TokenKind.IDENTIFIER)
-                self.expect(self.lexer.next_token(), TokenKind.OPEN_PARENTHESIS)
-                while arg := self.lexer.next_token():
-                    if arg.iskind(TokenKind.CLOSE_PARENTHESIS):
-                        break
-                    arguments.append(arg)
-                self.expect(self.lexer.next_token(), TokenKind.OPEN_CURLY)
-                while token := self.lexer.next_token():
-                    if token.iskind(TokenKind.CLOSE_CURLY):
-                        break
-                    elif token.iskind(TokenKind.IDENTIFIER) and token.value == 'return':
-                        return_expression = self.parse_operation()
-                        break
-                self.root.push(FunctionExpression(name, arguments, return_expression))
-            else:
-                if token.iskind(TokenKind.IDENTIFIER) and token.value == '$':
-                    self.root.push(self.parse_operation())
-
-        for i in self.root.children:
-            pprint.pprint(i.__dict__)
-
-class Location:
-    def __init__(self, file:str) -> None:
-        self.file:str = file
-        self.row:int = 0
-        self.col:int = 0
-
-class TokenKind:
-    IDENTIFIER: int = 1
-    OPEN_TAG: int = 2
-    COMMENT: int = 3
-    OPEN_PARENTHESIS: int = 4
-    CLOSE_PARENTHESIS: int = 5
-    OPEN_CURLY: int = 6
-    CLOSE_CURLY: int = 7
-    COMMA: int = 8
-    OPERATOR: int = 9
-
-    def __init__(self, kind: int) -> None:
-        self.kind: int = kind
-
-    @staticmethod
-    def fromChar(char: str):
-        return TokenKind(TokenKind.kinds()[char])
-
-    @staticmethod
-    def kinds():
-        return {
-            '<': TokenKind.OPEN_TAG,
-            '#': TokenKind.COMMENT,
-            '(': TokenKind.OPEN_PARENTHESIS,
-            ')': TokenKind.CLOSE_PARENTHESIS,
-            '{': TokenKind.OPEN_CURLY,
-            '}': TokenKind.CLOSE_CURLY,
-            ',': TokenKind.COMMA,
-            '+': TokenKind.OPERATOR,
-            '=': TokenKind.OPERATOR,
-        }
-
-    @staticmethod
-    def exists(char: str) -> bool:
-        return True if char in TokenKind.kinds() else False
-
-    def issinglechar(self) -> bool:
-        return True if self.kind in [
-            TokenKind.OPEN_PARENTHESIS,
-            TokenKind.CLOSE_PARENTHESIS,
-            TokenKind.OPEN_CURLY,
-            TokenKind.CLOSE_CURLY,
-            TokenKind.COMMA,
-            TokenKind.OPERATOR,
-        ] else False
-
+@dataclass
 class Token:
-    def __init__(self, char: str) -> None:
-        self.kind: TokenKind = TokenKind.fromChar(char) if TokenKind.exists(char) else TokenKind(TokenKind.IDENTIFIER)
-        self.value: str = char
-    def iskind(self, *kinds):
-        return True if self.kind.kind in kinds else False
-    def issinglechar(self) -> bool:
-        return self.kind.issinglechar()
+    kind: str
+    body: str
 
 class Lexer:
-    def __init__(self,file) -> None:
-        self.location = Location(file)
-        self.file = open(file, 'r')
-
-    def move_col(self):
-        self.location.col += 1
-
-    def move_row(self):
-        self.location.row += 1
-        self.location.col = 0
-
-    def next_token(self):
-        token = None
-        while char := self.file.read(1):
-            if token == None:
-                if char.isspace() or char in ["\n", "\t"]:
-                    continue
-                token = Token(char)
-                if token.issinglechar():
-                    break
-            else:
-                self.move_row() if char == "\n" else self.move_col()
-                if token.iskind(TokenKind.COMMENT, TokenKind.OPEN_TAG) and char == "\n":
-                    break;
-                if token.iskind(TokenKind.IDENTIFIER) and not char.isalpha():
-                    self.file.seek(self.file.tell() - 1)
-                    break;
-                token.value += char
+    def __init__(self, code: str):
+        self.code = code
+        self.pos = 0
+    def peek(self) -> Token:
+        pos = self.pos
+        token = self.next_token()
+        self.pos = pos
         return token
+    def next_token(self) -> Token:
+        token = None
+        while self.pos < len(self.code) and token ==  None:
+            if self.code[self.pos] in '()':
+                token = Token('parenthesis', self.code[self.pos])
+            elif self.code[self.pos].isdigit():
+                start = self.pos
+                while self.pos < len(self.code) and self.code[self.pos].isdigit():
+                    self.pos += 1
+                token  =Token('number', self.code[start:self.pos]) 
+            elif self.code[self.pos].isalpha():
+                start = self.pos
+                while self.pos < len(self.code) and self.code[self.pos].isalpha():
+                    self.pos += 1
+                token = Token('identifier', self.code[start:self.pos]) 
+            self.pos += 1
+        return token if token else Token('eof', '')
 
-l = Lexer('./examples/program.php')
-p = Parser(l)
-p.parse()
+@dataclass
+class Node:
+    @property
+    def kind(self) -> str:
+        return self.__class__.__name__
+
+@dataclass
+class Program(Node):
+    body: list[Node] = field(default_factory=lambda: [])
+    def append(self, node: Node):
+        self.body.append(node)
+
+@dataclass
+class FunctionCall(Node):
+    name: str
+    arguments: list[Node] = field(default_factory=lambda: [])
+    def append_arguments(self, node: Node):
+        self.arguments.append(node)
+
+@dataclass
+class NumberLiteral(Node):
+    value: int
+
+@dataclass
+class Parser:
+    lexer: Lexer
+    def _parse_number(self, token: Token) -> Node:
+        return NumberLiteral(int(token.body))
+    def _parse_function_call(self, token: Token) -> Node:
+        fn = FunctionCall(token.body)
+        fn.append_arguments(self._parse_number(self.expect('number')))
+        if self.lexer.peek().kind == 'parenthesis':
+            self.expect('parenthesis')
+            fn.append_arguments(self._parse_function_call(self.expect('identifier'))) 
+            self.expect('parenthesis')
+        else:
+            fn.append_arguments(self._parse_number(self.expect('number')))
+        return fn
+    def expect(self, kind: str) -> Token:
+        token = self.lexer.next_token()
+        if token == None or token.kind != kind:
+            raise SyntaxError(f'Expected {kind} but got {token.kind}')
+        return token
+    def parse(self) -> Node:
+        program = Program()
+        self.expect('parenthesis')
+        program.append(self._parse_function_call(self.expect('identifier')))
+        return program
+
+class Visitor:
+    def visit(self, node: Node, parent: Node):
+        print(node.kind)
+        # method = getattr(self, f'visit_{node.kind}', self.generic_visit)
+        # return method(node)
+    def generic_visit(self, node: Node):
+        raise RuntimeError(f'No visit_{node.kind} method')
+
+lexer = Lexer('(add 2 (subtract 4 2))')
+parser = Parser(lexer)
+print(parser.parse())
+
