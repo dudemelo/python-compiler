@@ -82,14 +82,43 @@ class Parser:
         return program
 
 class Visitor:
-    def visit(self, node: Node, parent: Node):
-        print(node.kind)
-        # method = getattr(self, f'visit_{node.kind}', self.generic_visit)
-        # return method(node)
-    def generic_visit(self, node: Node):
+    def visit(self, node: Node, parent: Node|None=None):
+        method = getattr(self, f'visit_{node.kind.lower()}', self.generic_visit)
+        return method(node, parent)
+    def visit_program(self, node: Program, parent: Node|None=None):
+        for child in node.body:
+            return self.visit(child, node)
+    def visit_functioncall(self, node: FunctionCall, parent: Node|None):
+        print(f'Visiting {node.name} with {len(node.arguments)} arguments {node.arguments}')
+        for child in node.arguments:
+            return self.visit(child, node)
+    def visit_numberliteral(self, node: NumberLiteral, parent: Node|None=None):
+        return node.value
+    def generic_visit(self, node: Node, parent: Node|None):
         raise RuntimeError(f'No visit_{node.kind} method')
+
+class PHPCodeGenerator(Visitor):
+    def visit_program(self, node: Program, parent: Node|None=None):
+        result = "<?php\necho "
+        for child in node.body:
+            result += self.visit(child, node)
+            result += ";\n"
+        return result
+
+    def visit_functioncall(self, node: FunctionCall, parent: Node|None):
+        if node.name == 'add':
+            left_operand = self.visit(node.arguments[0], node)
+            right_operand = self.visit(node.arguments[1], node)
+            return f"{left_operand} + {right_operand}"
+        if node.name == 'subtract':
+            left_operand = self.visit(node.arguments[0], node)
+            right_operand = self.visit(node.arguments[1], node)
+            return f"{left_operand} - {right_operand}"
+    
+    def visit_numberliteral(self, node: NumberLiteral, parent: Node|None=None):
+        return str(node.value)
 
 lexer = Lexer('(add 2 (subtract 4 2))')
 parser = Parser(lexer)
-print(parser.parse())
-
+code_generator = PHPCodeGenerator()
+print(code_generator.visit(parser.parse()))
