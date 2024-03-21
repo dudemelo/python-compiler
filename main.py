@@ -89,7 +89,6 @@ class Visitor:
         for child in node.body:
             return self.visit(child, node)
     def visit_functioncall(self, node: FunctionCall, parent: Node|None):
-        print(f'Visiting {node.name} with {len(node.arguments)} arguments {node.arguments}')
         for child in node.arguments:
             return self.visit(child, node)
     def visit_numberliteral(self, node: NumberLiteral, parent: Node|None=None):
